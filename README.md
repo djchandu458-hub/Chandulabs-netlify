@@ -1,46 +1,106 @@
-# ChanduLabs – Live Talking AI with Voice Cloning
+# ChanduLabs – Live Talking AI with Your Cloned Voice  
+A lightweight ElevenLabs-style system that lets you type or speak, and replies in **your cloned voice**, in multiple Indian languages.
 
-ChanduLabs is a lightweight ElevenLabs-style voice system that uses:
-- A custom Colab server for voice synthesis (Gemini TTS + optional RVC)
-- A simple Vercel frontend for live chat
-- Unlimited language support (EN, HI, TE, TA, KN, ML, BN)
-- Your own cloned voice for responses
+This project uses:
+- A **Colab-hosted RVC / Gemini TTS server** for generating your voice  
+- A **Netlify-hosted frontend + serverless function**  
+- Multi-language support (EN, HI, TE, TA, KN, ML, BN)  
+- Simple HTML + JS frontend  
+- Your own cloned voice (via RVC server + Gemini API)
 
-## 📌 Features
-- Text-to-speech using your cloned voice
-- Multi-language input and output
-- Works with microphone or typed text
-- Frontend built with HTML + JS
-- Backend API deployed on Vercel
-- Voice processing done through a Colab server tunnel (loca.lt)
+---
 
-## 📁 Project Structure
+## 📁 Project Structure (Netlify)
+
 ```
-index.html          → main UI
-public/app.js       → frontend logic
-api/voice.js        → backend API on Vercel
-package.json        → project config for Vercel
-vercel.json         → routing + build settings
-README.md           → project description
+index.html                        → main UI (root)
+public/app.js                     → frontend logic
+netlify/functions/voice.js        → backend serverless function
+netlify.toml                      → Netlify configuration
+package.json                      → project config
+README.md                         → documentation
 ```
 
-## 🔗 Required Environment Variables (Vercel)
-- `RVC_SERVER_URL` = Your public Colab URL (loca.lt)
-- `GEMINI_API_KEY` = Your Gemini API key
+---
 
-## 🚀 How It Works
-1. Colab hosts the voice synthesis server (FastAPI)
-2. loca.lt exposes a public URL
-3. Vercel frontend sends requests to your Colab server
-4. Your cloned voice is generated and returned as audio
-5. Browser plays the audio instantly
+## 🔧 Environment Variables (Netlify)
 
-## 🖥️ Deployment
-- Connect this repo to Vercel
-- Add environment variables
-- Redeploy
-- Open the app and test your live talking AI
+Go to **Netlify → Site Settings → Build & Deploy → Environment Variables**  
+Add:
 
-## 🎤 Voice Cloning (Optional)
-You can attach an RVC model later for true voice cloning.
-(Current version uses Gemini TTS as fallback.)
+```
+RVC_SERVER_URL = https://<your-colab-public-url>
+GEMINI_API_KEY = <your-gemini-api-key>
+```
+
+### Important:
+- `RVC_SERVER_URL` changes every time your Colab notebook restarts.  
+- Use the latest locatunnel/ngrok/serveo URL.  
+- Rotate your Gemini key if it was exposed earlier.
+
+---
+
+## 🚀 Deployment on Netlify
+
+1. Push files to GitHub.  
+2. Go to **Netlify → Add New Site → Import From Git**.  
+3. Select your repo.  
+4. Deploy the site.  
+5. Add environment variables (`RVC_SERVER_URL`, `GEMINI_API_KEY`).  
+6. Trigger a **Redeploy**.
+
+---
+
+## 🛠️ How the System Works
+
+1. Frontend sends JSON →  
+   `/.netlify/functions/voice`
+
+2. Netlify function decides:
+   - If `RVC_SERVER_URL` active → forwards to your Colab RVC server → returns **your cloned voice**  
+   - Else → uses **Gemini TTS fallback**
+
+3. Function returns **base64 WAV audio**.
+
+4. Browser converts base64 → Blob → plays audio.
+
+---
+
+## 🧪 Test the Voice API
+
+Use curl:
+
+```bash
+curl -X POST https://YOUR_NETLIFY_SITE/.netlify/functions/voice \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Hello from ChanduLabs","language":"en","mode":"cloned"}' \
+  --output output.wav
+```
+
+If `output.wav` plays → backend is correct.
+
+---
+
+## 🎙️ Supported Languages  
+- English  
+- Hindi  
+- Telugu  
+- Tamil  
+- Kannada  
+- Malayalam  
+- Bengali  
+
+---
+
+## ❗ Troubleshooting  
+- If audio doesn’t play:  
+  Check browser **Console → Network → voice function response**.  
+- If Netlify function returns JSON error:  
+  Recheck your environment variables.  
+- If Colab link expired:  
+  Restart tunnel → update `RVC_SERVER_URL` → Redeploy.
+
+---
+
+## ❤️ Credits  
+ChanduLabs UI, voice routing, and serverless design created to deliver a simple, fast AI voice experience using open tools (Netlify + Colab + Gemini).

@@ -1,3 +1,4 @@
+# netlify.toml — place at repo root
 [build]
   publish = "."
   functions = "netlify/functions"

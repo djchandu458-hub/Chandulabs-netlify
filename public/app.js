@@ -1,96 +1,121 @@
 // public/app.js
-// Frontend logic for ChanduLabs live talking AI.
+// Enhanced controls: Send (prepare), Speak (prepare+play), Play, Stop
+(() => {
+  const $ = id => document.getElementById(id);
+  const logEl = () => $('log');
 
-const $ = (id) => document.getElementById(id);
-const log = (msg) => {
-  const el = $('log');
-  el.textContent = msg;
-};
+  function log(msg) { if (logEl()) logEl().textContent = msg; console.log(msg); }
 
-// Elements
-const textEl = $('text');
-const langEl = $('lang');
-const micBtn = $('micBtn');
-const speakBtn = $('speakBtn');
-const stopBtn = $('stopBtn');
+  const textEl = () => $('text');
+  const langEl  = () => $('lang');
+  const sendBtn = () => $('sendBtn');
+  const speakBtn = () => $('speakBtn');
+  const playBtn = () => $('playBtn');
+  const stopBtn = () => $('stopBtn');
+  const player = () => $('player');
 
-let currentAudio = null;
+  let lastBase64 = null;
+  let lastBlobUrl = null;
 
-// ---- PLAYBACK ----
-function playAudio(blob) {
-  if (currentAudio) currentAudio.pause();
-  const url = URL.createObjectURL(blob);
-  const audio = new Audio(url);
-  currentAudio = audio;
-  audio.play();
-  log("Playing response...");
-}
+  function base64ToBlob(base64, mime='audio/wav') {
+    const binary = atob(base64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
+  }
 
-stopBtn.addEventListener('click', () => {
-  if (currentAudio) currentAudio.pause();
-  log("Audio stopped.");
-});
+  function setPlayerFromBase64(b64) {
+    if (!b64) return;
+    try {
+      const blob = base64ToBlob(b64, 'audio/wav');
+      if (lastBlobUrl) { try { URL.revokeObjectURL(lastBlobUrl); } catch(e) {} }
+      lastBlobUrl = URL.createObjectURL(blob);
+      player().src = lastBlobUrl;
+    } catch (e) {
+      console.error('setPlayerFromBase64 error', e);
+      throw e;
+    }
+  }
 
-// ---- SEND TEXT TO BACKEND ----
-async function sendText() {
-  const text = textEl.value.trim();
-  const language = langEl.value;
+  async function callVoiceAPI(text, language) {
+    const endpoint = '/.netlify/functions/voice';
+    log('Sending to server...');
+    const resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, language, mode: 'cloned' })
+    });
 
-  if (!text) return alert("Type something or use mic.");
+    if (!resp.ok) {
+      const body = await resp.text().catch(()=>'<no body>');
+      throw new Error('Server error: ' + body);
+    }
 
-  log("Sending text to server...");
+    const b64 = await resp.text();
+    if (!b64) throw new Error('Empty response from server.');
+    return b64.trim();
+  }
 
-  const res = await fetch('/api/voice', {
-    method: 'POST',
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, language, mode: "cloned" })
+  async function handleSend(autoplay=false) {
+    const txt = (textEl().value || '').trim();
+    const lang = (langEl().value || 'en');
+
+    if (!txt) { alert('Type text to send.'); return; }
+
+    // UI
+    sendBtn().disabled = true;
+    speakBtn().disabled = true;
+    playBtn().disabled = true;
+    stopBtn().disabled = false;
+    log('Processing...');
+
+    try {
+      const b64 = await callVoiceAPI(txt, lang);
+      lastBase64 = b64;
+      setPlayerFromBase64(b64);
+      log(autoplay ? 'Playing...' : 'Audio prepared. Press Play to listen.');
+      if (autoplay) {
+        try { await player().play(); } catch(e){ console.warn('auto play failed', e); }
+      }
+      playBtn().disabled = false;
+    } catch (err) {
+      console.error(err);
+      alert('Error: ' + (err.message || err));
+      log('Error: ' + (err.message || err));
+    } finally {
+      sendBtn().disabled = false;
+      speakBtn().disabled = false;
+    }
+  }
+
+  // play/stop handlers
+  playBtn().addEventListener('click', () => {
+    if (!lastBase64) { log('No audio prepared. Press Send or Speak first.'); return; }
+    try { player().play(); log('Playing...'); } catch(e){ console.warn(e); }
   });
 
-  const blob = await res.blob();
-  playAudio(blob);
-}
+  stopBtn().addEventListener('click', () => {
+    try { player().pause(); player().currentTime = 0; log('Stopped.'); } catch(e){ console.warn(e); }
+  });
 
-speakBtn.addEventListener('click', sendText);
+  // Send (prepare but don't autoplay)
+  sendBtn().addEventListener('click', () => handleSend(false));
 
-// ---- MIC RECORDING ----
-let mediaRecorder;
-let chunks = [];
+  // Speak (prepare and autoplay)
+  speakBtn().addEventListener('click', () => handleSend(true));
 
-async function initMic() {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  mediaRecorder = new MediaRecorder(stream);
+  // initial state
+  (function init(){
+    playBtn().disabled = true;
+    sendBtn().disabled = false;
+    speakBtn().disabled = false;
+    stopBtn().disabled = true;
+    log('Ready.');
+    // enable stop when audio exists
+    player().addEventListener('play', ()=> stopBtn().disabled = false);
+    player().addEventListener('pause', ()=> {});
+    player().addEventListener('ended', ()=> log('Playback finished.'));
+  })();
 
-  mediaRecorder.ondataavailable = e => chunks.push(e.data);
-
-  mediaRecorder.onstop = async () => {
-    const audioBlob = new Blob(chunks, { type: "audio/webm" });
-    chunks = [];
-
-    log("Uploading voice for reply...");
-
-    const fd = new FormData();
-    fd.append("audio", audioBlob);
-    fd.append("language", langEl.value);
-    fd.append("mode", "cloned");
-
-    const res = await fetch("/api/voice", { method: "POST", body: fd });
-    const blob = await res.blob();
-    playAudio(blob);
-  };
-
-  log("Mic ready.");
-}
-
-micBtn.addEventListener('mousedown', async () => {
-  if (!mediaRecorder) await initMic();
-  chunks = [];
-  mediaRecorder.start();
-  log("Recording... release to stop.");
-});
-
-micBtn.addEventListener('mouseup', () => {
-  if (mediaRecorder && mediaRecorder.state === "recording") {
-    mediaRecorder.stop();
-    log("Processing your voice...");
-  }
-});
+})();

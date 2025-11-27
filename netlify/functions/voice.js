@@ -1,21 +1,40 @@
 // netlify/functions/voice.js
-// Simple Netlify function for ChanduLabs
+// Netlify function for ChanduLabs
 // Accepts POST JSON: { text, language, mode }
-// Returns audio/wav as base64 (isBase64Encoded: true)
+// Returns base64 WAV (isBase64Encoded: true)
+// Requires env vars: RVC_SERVER_URL (optional), GEMINI_API_KEY (fallback)
 
 const SAMPLE_RATE = 24000;
+
+function jsonError(status, obj) {
+  return {
+    statusCode: status,
+    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    body: JSON.stringify(obj)
+  };
+}
+
+function base64Response(base64) {
+  return {
+    statusCode: 200,
+    headers: { 'Content-Type': 'audio/wav', 'Access-Control-Allow-Origin': '*' },
+    body: base64,
+    isBase64Encoded: true
+  };
+}
 
 exports.handler = async function (event, context) {
   try {
     if (event.httpMethod !== 'POST') {
-      return { statusCode: 405, body: JSON.stringify({ error: 'Only POST allowed' }) };
+      return jsonError(405, { error: 'Only POST allowed' });
     }
 
+    // Parse body (Netlify gives event.body as string)
     let body;
     try {
       body = JSON.parse(event.body || '{}');
     } catch (e) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON' }) };
+      return jsonError(400, { error: 'Invalid JSON', details: String(e).slice(0,300) });
     }
 
     const text = (body.text || '').trim();
@@ -23,7 +42,7 @@ exports.handler = async function (event, context) {
     const mode = body.mode || 'cloned';
 
     if (!text) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'Missing text' }) };
+      return jsonError(400, { error: 'Missing text' });
     }
 
     const RVC_SERVER_URL = (process.env.RVC_SERVER_URL || '').replace(/\/$/, '');
@@ -33,34 +52,29 @@ exports.handler = async function (event, context) {
     // If cloned mode and RVC server configured, proxy to it
     if (mode === 'cloned' && RVC_SERVER_URL) {
       try {
-        const resp = await fetch(`${RVC_SERVER_URL}/synthesize`, {
+        const url = `${RVC_SERVER_URL}/synthesize`;
+        const resp = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text, language })
         });
 
         if (!resp.ok) {
-          const txt = await resp.text();
-          return { statusCode: 502, body: JSON.stringify({ error: 'RVC server failed', details: txt.slice(0,300) }) };
+          const txt = await resp.text().catch(() => '<no body>');
+          return jsonError(502, { error: 'RVC server failed', status: resp.status, details: txt.slice(0,300) });
         }
 
         const ab = await resp.arrayBuffer();
         const buf = Buffer.from(ab);
-
-        return {
-          statusCode: 200,
-          headers: { 'Content-Type': 'audio/wav' },
-          body: buf.toString('base64'),
-          isBase64Encoded: true
-        };
+        return base64Response(buf.toString('base64'));
       } catch (err) {
-        return { statusCode: 502, body: JSON.stringify({ error: 'RVC connection error', details: String(err).slice(0,300) }) };
+        return jsonError(502, { error: 'RVC connection error', details: String(err).slice(0,300) });
       }
     }
 
-    // Fallback to Gemini TTS
+    // Fallback: Gemini TTS
     if (!GEMINI_API_KEY) {
-      return { statusCode: 500, body: JSON.stringify({ error: 'No RVC_SERVER_URL or GEMINI_API_KEY configured' }) };
+      return jsonError(500, { error: 'No RVC_SERVER_URL configured and GEMINI_API_KEY not set' });
     }
 
     const gBody = {
@@ -68,28 +82,26 @@ exports.handler = async function (event, context) {
       audio: { encoding: 'LINEAR16', sampleRateHertz: SAMPLE_RATE }
     };
 
-    const gResp = await fetch(GEMINI_TTS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GEMINI_API_KEY}` },
-      body: JSON.stringify(gBody)
-    });
+    try {
+      const gResp = await fetch(GEMINI_TTS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GEMINI_API_KEY}` },
+        body: JSON.stringify(gBody)
+      });
 
-    if (!gResp.ok) {
-      const txt = await gResp.text();
-      return { statusCode: 502, body: JSON.stringify({ error: 'Gemini TTS failed', details: txt.slice(0,300) }) };
+      if (!gResp.ok) {
+        const txt = await gResp.text().catch(() => '<no body>');
+        return jsonError(502, { error: 'Gemini TTS failed', status: gResp.status, details: txt.slice(0,300) });
+      }
+
+      const gab = await gResp.arrayBuffer();
+      const gb = Buffer.from(gab);
+      return base64Response(gb.toString('base64'));
+    } catch (err) {
+      return jsonError(502, { error: 'Gemini TTS request error', details: String(err).slice(0,300) });
     }
 
-    const gab = await gResp.arrayBuffer();
-    const gb = Buffer.from(gab);
-
-    return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'audio/wav' },
-      body: gb.toString('base64'),
-      isBase64Encoded: true
-    };
-
   } catch (e) {
-    return { statusCode: 500, body: JSON.stringify({ error: 'Internal error', details: String(e).slice(0,300) }) };
+    return jsonError(500, { error: 'Internal error', details: String(e).slice(0,300) });
   }
 };

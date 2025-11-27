@@ -1,10 +1,9 @@
 {
-  "name": "chandu-labs",
+  "name": "chandu-labs-netlify",
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev || true",
-    "start": "node server.js || true"
+    "start": "echo \"This is a static site served by Netlify\""
   },
   "dependencies": {}
 }

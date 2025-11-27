@@ -3,70 +3,121 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ChanduLabs — AI Voice Clone Live Chat</title>
+  <title>ChanduLabs — Live Talking AI</title>
 
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      max-width: 900px;
-      margin: 30px auto;
-      padding: 10px;
+    :root{
+      --card-bg: rgba(8,20,40,0.55);
+      --accent: #4fc3f7;
+      --muted: rgba(255,255,255,0.75);
+      --btn-radius: 10px;
     }
-    h1 { font-size: 1.5rem; margin-bottom: 10px; }
-    textarea {
-      width: 100%;
-      padding: 10px;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-      font-size: 15px;
+    html,body{height:100%; margin:0; font-family:Inter,Segoe UI,Arial; background: linear-gradient(180deg,#03102a 0%, #062036 60%, #0b2540 100%);}
+    .wrap{min-height:100%; display:flex; align-items:center; justify-content:center; padding:28px;}
+    .card{
+      width:100%; max-width:920px; background:var(--card-bg); border-radius:14px; padding:22px; color:var(--muted);
+      box-shadow: 0 8px 30px rgba(3,9,20,0.6); border:1px solid rgba(255,255,255,0.04);
+      backdrop-filter: blur(8px);
     }
-    select, button {
-      padding: 10px 15px;
-      margin-top: 10px;
-      border-radius: 6px;
-      border: 1px solid #aaa;
-      background: white;
-      font-size: 15px;
+    h1{margin:0 0 6px 0; font-size:20px; color:#e6f7ff;}
+    p.lead{margin:0 0 18px 0; color:rgba(230,247,255,0.85); font-size:14px}
+    textarea{width:100%; min-height:120px; padding:14px; border-radius:10px; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02); color:#eaf6ff; resize:vertical; font-size:15px}
+    .controls{display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; align-items:center}
+    .left { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .right { margin-left:auto; display:flex; gap:10px; align-items:center; }
+
+    /* colourful action buttons */
+    .btn {
+      display:inline-flex; align-items:center; gap:8px;
+      padding:10px 14px; border-radius:var(--btn-radius); border:none; cursor:pointer;
+      font-weight:600; color:#062a38;
+      box-shadow: 0 6px 14px rgba(2,8,15,0.35);
+      transition: transform .08s ease, box-shadow .08s ease;
     }
-    .controls { margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap; }
-    #log {
-      margin-top: 15px;
-      padding: 10px;
-      background: #f5f5f5;
-      border-radius: 6px;
-      font-size: 13px;
-      min-height: 40px;
+    .btn:active{ transform: translateY(1px); }
+    .btn--send{ background: linear-gradient(90deg,#ffd166,#ff7b7b); color:#062a38; }
+    .btn--speak{ background: linear-gradient(90deg,#8be9a8,#3ddc84); color:#062a38; }
+    .btn--play{ background: linear-gradient(90deg,#a0c4ff,#6b8cff); color:#062a38; }
+    .btn--stop{ background: linear-gradient(90deg,#ffadad,#ff7b7b); color:#062a38; }
+
+    /* icons (circle) */
+    .icon {
+      width:20px;height:20px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;
+      background:rgba(255,255,255,0.9); padding:3px;
+    }
+
+    select { padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02); color:var(--muted); }
+    audio{ width:100%; margin-top:14px; border-radius:8px; outline:none; }
+
+    #log { margin-top:16px; padding:10px 12px; background: rgba(255,255,255,0.03); border-radius:8px; color:rgba(235,245,255,0.9); font-size:14px; min-height:28px }
+    footer{ margin-top:12px; font-size:12px; color:rgba(255,255,255,0.45) }
+
+    /* responsive */
+    @media (max-width:640px){
+      .right{margin-left:0; width:100%; justify-content:flex-start}
+      .controls{flex-direction:column; align-items:stretch}
+      .left, .right{width:100%; justify-content:flex-start}
     }
   </style>
 </head>
 <body>
+  <div class="wrap">
+    <div class="card">
+      <h1>ChanduLabs — Live Talking AI (Your Cloned Voice)</h1>
+      <p class="lead">Type text or use the mic. Responses come back in your cloned voice. Choose language, then Send or Speak.</p>
 
-  <h1>ChanduLabs — Live Talking AI (Your Cloned Voice)</h1>
+      <textarea id="text">Hello — test my voice. Say something back in the same language.</textarea>
 
-  <p>Type text or use the mic. The bot replies using your cloned voice.</p>
+      <div class="controls">
+        <div class="left">
+          <select id="lang" title="Select language">
+            <option value="en">English</option>
+            <option value="hi">Hindi</option>
+            <option value="te">Telugu</option>
+            <option value="ta">Tamil</option>
+            <option value="kn">Kannada</option>
+            <option value="ml">Malayalam</option>
+            <option value="bn">Bengali</option>
+          </select>
 
-  <textarea id="text" rows="5">Hello! This is ChanduLabs demo.</textarea>
+          <!-- Send (prepare audio) -->
+          <button id="sendBtn" class="btn btn--send" title="Send text to server (prepares audio)">
+            <span class="icon">✉️</span>
+            Send
+          </button>
 
-  <div class="controls">
-    <select id="lang">
-      <option value="en">English</option>
-      <option value="hi">Hindi</option>
-      <option value="te">Telugu</option>
-      <option value="ta">Tamil</option>
-      <option value="kn">Kannada</option>
-      <option value="ml">Malayalam</option>
-      <option value="bn">Bengali</option>
-    </select>
+          <!-- Speak (send + autoplay) -->
+          <button id="speakBtn" class="btn btn--speak" title="Send & speak now">
+            <span class="icon">🔊</span>
+            Speak
+          </button>
 
-    <button id="micBtn">🎤 Hold to Record</button>
-    <button id="speakBtn">Speak</button>
-    <button id="stopBtn">Stop Audio</button>
+          <!-- Play already prepared audio -->
+          <button id="playBtn" class="btn btn--play" title="Play prepared audio">
+            <span class="icon">▶️</span>
+            Play
+          </button>
+
+          <!-- Stop audio -->
+          <button id="stopBtn" class="btn btn--stop" title="Stop audio playback">
+            <span class="icon">⏹️</span>
+            Stop Audio
+          </button>
+        </div>
+
+        <div class="right">
+          <button id="micBtn" class="btn" title="Microphone disabled (optional)"><span class="icon">🎤</span> Hold to record</button>
+        </div>
+      </div>
+
+      <audio id="player" controls></audio>
+
+      <div id="log">Ready.</div>
+
+      <footer>Interface styled with a dim blue theme • Icons are decorative</footer>
+    </div>
   </div>
 
-  <div id="log">Ready.</div>
-
-  <!-- Frontend script -->
-  <script src="/app.js"></script>
-
+  <script src="public/app.js"></script>
 </body>
 </html>
